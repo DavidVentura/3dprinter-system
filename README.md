@@ -1,9 +1,35 @@
 Attempt to simplify / streamline my 3dprinter usage.
 
+Features:
 1. GCode sender with progress reports
-2. Basic web UI to move the print head/bed.
-3. Cura plugin to output the gcode via SFTP/HTTP.
+
+Reports via MQTT
+
+```bash
+printer/PRINTER_STATUS printing
+printer/TEMP 176.29/190.00,50.07/50.00
+printer/JOB_STATUS 20 # %
+printer/PRINTER_STATUS idle
+printer/PRINTER_STATUS aborted
+```
+
+Triggers via MQTT:
+
+```bash
+$ mosquitto_pub -h iot.labs -t "printer/print" -m "CE3_xyzCalibration_cube.gcode"
+```
+
+Triggering a job while printing is ignored.
+
+
+Basic commands via MQTT:
+
+- `stop` will stop the print instead of emitting the next gcode step.
+- `move X10` / `move Y10` etc &ndash; relative moves.
+
+--------
 
 Considering:
-- Trigger system? Notifications on progress, start, stop
-- Custom GCode headers - cleaning nozzle / aligning bed.
+- Custom GCode headers.
+- Basic web UI to move the print head/bed.
+- Cura plugin to output the gcode via SFTP/HTTP.
