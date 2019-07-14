@@ -98,10 +98,16 @@ class Printer:
             log.info('Stop printing')
             self.printing = False
 
-        elif msg == 'move':
-            log.info('Move')
+        elif msg.startswith('rmove'):
+            log.info('rmove')
+            _, axis_distance = msg.strip().split(' ')
             self.write_and_ignore_result(Printer.RELATIVE_POSITIONING)
-            self.write_and_ignore_result('G0 X10') # Move X+10
+            self.write_and_ignore_result('G0 %s' % axis_distance)
+        elif msg.startswith('home'):
+            log.info('home')
+            # home X Y Z => X Y Z
+            axis_to_home = ' '.join(msg.strip().split(' ')[1:])
+            self.write_and_ignore_result('G28 %s' % axis_to_home)
 
 
 def handle_info_msg(topic, message, mqtt_client):

@@ -25,7 +25,8 @@ Triggering a job while printing is ignored.
 Basic commands via MQTT:
 
 - `stop` will stop the print instead of emitting the next gcode step.
-- `move X10` / `move Y10` etc &ndash; relative moves.
+- `rmove X10` / `rmove Y10` etc &ndash; relative moves.
+- `home X` / `home X Y` etc &ndash; home axis.
 
 --------
 
