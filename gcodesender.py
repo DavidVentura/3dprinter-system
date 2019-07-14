@@ -10,45 +10,62 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(message)s', datef
 log = logging.getLogger(__name__)
 
 class Printer:
-    def __init__(self, port, baud, info_q):
+    def __init__(self, port, baud):
         self.serial = serial.Serial(port, baud, timeout=5)
-        self.info_q = info_q
 
-    def reset(self):
-        log.info('Resetting')
-        self.serial.setDTR(0)
-
-        # There is presumably some latency required.
-        time.sleep(1)
-        self.serial.setDTR(1)
-        time.sleep(3)
-        ack = self.__get_acknowledgement('start')
-        self.info('Reset got %s', ack)
-
-    def write(self, msg):
+    def write_and_get_ack(self, msg):
         msg = msg.split(';')[0] # Ignore comments
         msg = msg.strip()
-        #msg = msg.replace(' ', '').replace('\t', '').strip()
         if len(msg) == 0:
             return
+
         log.debug('Sending: %s', msg)
         msg = msg.encode()
         self.serial.write(msg + b'\n')
-        ack = self.__get_acknowledgement('ok')
-        log.debug('Got ACK: %s', ack)
+        return self.__get_acknowledgement('ok')
 
     def __get_acknowledgement(self, ack):
         while True:
             response = self.serial.readline().strip()
             log.debug('got %s', response)
             if ack.lower() in response.decode('ascii').lower():
-                return response
-
-            # We assume it's informational
-            self.info_q.put(response)
+                break
+            yield response
 
     def close(self):
         self.serial.close()
+
+def send_line_and_wait_ack(printer, line):
+    for msg in printer.write_and_get_ack(line):
+        log.info(msg)
+
+def main():
+    args = parse_args()
+    assert Path(args.file).exists(), "%s does not exist" % args.file
+
+    printer = Printer(args.port, args.baudrate)
+    time.sleep(1) # wait for init to be done
+    send_line_and_wait_ack(printer, 'M115')
+    time.sleep(1) # wait for init to be done
+    current_percentage = 0
+    current_line = 0
+    lines = open(args.file, 'r').readlines()
+    log.setLevel(logging.INFO)
+    log.info("Total lines: %d", len(lines))
+
+    for line in lines:
+        current_line += 1
+
+        send_line_and_wait_ack(printer, line)
+        if current_line % 500 == 0:
+            send_line_and_wait_ack(printer, 'M105')
+
+        perc = int(current_line/len(lines) * 100)
+        if perc > current_percentage:
+            current_percentage = perc
+            log.info("Print status: %s %%", current_percentage)
+
+    p.close()
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -57,30 +74,5 @@ def parse_args():
     parser.add_argument('file')
     args = parser.parse_args()
     return args
-
-def main():
-    info_q = Queue()
-    args = parse_args()
-    assert Path(args.file).exists(), "%s does not exist" % args.file
-
-    p = Printer(args.port, args.baudrate, info_q)
-    current_percentage = 0
-    current_line = 0
-    lines = open(args.file, 'r').readlines()
-
-    for line in lines:
-        current_line += 1
-        p.write(line)
-        time.sleep(0.001)
-
-        while not info_q.empty():
-            info_line = info_q.get_nowait()
-            if info_line is not None:
-                log.info(info_line)
-        if int(current_line/len(lines)) > current_percentage:
-            current_percentage = int(current_line/len(lines))
-            log.info("Print status: %s %%", current_percentage)
-    
-    p.close()
 
 main()
