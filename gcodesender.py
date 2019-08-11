@@ -25,7 +25,7 @@ class Printer:
         self.serial = serial.Serial(port, baud, timeout=5)
 
         time.sleep(1) # wait for init to be done
-        self.write_and_get_ignore_result(Printer.FIRMWARE_INFO)
+        self.write_and_ignore_result(Printer.FIRMWARE_INFO)
         time.sleep(1) # wait for init to be done
 
     def write_and_ignore_result(self, msg):
