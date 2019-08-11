@@ -36,6 +36,7 @@ class Printer:
         msg = msg.split(';')[0] # Ignore comments
         msg = msg.strip()
         if len(msg) == 0:
+            log.debug("No message to send")
             return []
 
         log.debug('Sending: %s', msg)
@@ -44,10 +45,18 @@ class Printer:
         return self.__get_acknowledgement('ok')
 
     def __get_acknowledgement(self, ack):
+        ack = ack.lower()
         while True:
             response = self.serial.readline().strip()
             log.debug('got %s', response)
-            if ack.lower() in response.decode('ascii').lower():
+            r = response.decode('ascii')
+            """ok T:24.26 /0.00 B:24.37 /0.00 @:0 B@:0"""
+            if r.lower().startswith(ack):
+                log.debug('Starts with ack')
+                second_part_ascii = r[len(ack):].strip()
+                if len(second_part_ascii) > 0:
+                    log.debug("Yielding %s", second_part_ascii)
+                    yield response[len(ack):]
                 break
             yield response
 
@@ -77,10 +86,12 @@ class Printer:
                 self.emit_message(topic='INFO', message=msg.decode('ascii'))
 
             if current_line % 500 == 0:
+                log.info("Asking for temp.. current_line=%d, total_lines=%d", current_line, len(lines))
                 for msg in self.write_and_get_ack(Printer.REPORT_TEMP):
                     self.emit_message(topic='TEMP', message=msg.decode('ascii'))
 
             perc = int(current_line/len(lines) * 100)
+            # FIXME also compare bytes vs total bytes
             if perc > current_percentage:
                 current_percentage = perc
                 self.emit_message('JOB_STATUS', str(perc))
@@ -112,7 +123,9 @@ class Printer:
             msg = ' '.join(msg.strip().split(' ')[1:])
             log.info('Raw message: %s', msg)
             for reply in self.write_and_get_ack(msg):
-                log.info(reply)
+                log.info("Reply %s", reply)
+                self.emit_message(topic='TEMP', message=reply.decode('ascii'))
+            log.info('Done with msg')
         else:
             log.info('Unknown command %s', msg)
 
@@ -124,11 +137,14 @@ def handle_info_msg(topic, message, mqtt_client):
             return
         parsed_msg = message
 
+        log.debug('Handling message %s', message)
         if message.startswith('T:'):
+            log.debug('Its a temp message')
             topic = 'TEMP'
             m = temp_message_re.search(message)
             if m:
                 parsed_msg = '%s/%s,%s/%s' % (m.group('nozzle_temp'), m.group('nozzle_target'), m.group('bed_temp'), m.group('bed_target'))
+                log.debug('And the parsed msg is %s', parsed_msg)
 
         topic = 'printer/%s' % topic
         mqtt_client.publish(topic, parsed_msg)
