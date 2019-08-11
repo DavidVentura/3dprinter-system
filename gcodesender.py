@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import logging
 import re
@@ -24,8 +25,7 @@ class Printer:
         self.serial = serial.Serial(port, baud, timeout=5)
 
         time.sleep(1) # wait for init to be done
-        for f in self.write_and_get_ack(Printer.FIRMWARE_INFO): # Firmware info
-            pass
+        self.write_and_get_ignore_result(Printer.FIRMWARE_INFO)
         time.sleep(1) # wait for init to be done
 
     def write_and_ignore_result(self, msg):
@@ -108,6 +108,13 @@ class Printer:
             # home X Y Z => X Y Z
             axis_to_home = ' '.join(msg.strip().split(' ')[1:])
             self.write_and_ignore_result('G28 %s' % axis_to_home)
+        elif msg.startswith('raw'): # FIXME
+            msg = ' '.join(msg.strip().split(' ')[1:])
+            log.info('Raw message: %s', msg)
+            for reply in self.write_and_get_ack(msg):
+                log.info(reply)
+        else:
+            log.info('Unknown command %s', msg)
 
 
 def handle_info_msg(topic, message, mqtt_client):
