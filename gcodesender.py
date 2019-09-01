@@ -83,12 +83,11 @@ class Printer:
             time.sleep(0.001)
 
             for msg in self.write_and_get_ack(line):
-                self.emit_message(topic='INFO', message=msg.decode('ascii'))
+                self.emit_message(topic='INFO', message=msg.decode('ascii').strip())
 
             if current_line % 500 == 0:
                 log.info("Asking for temp.. current_line=%d, total_lines=%d", current_line, len(lines))
-                for msg in self.write_and_get_ack(Printer.REPORT_TEMP):
-                    self.emit_message(topic='TEMP', message=msg.decode('ascii'))
+                self.request_temp()
 
             perc = int(current_line/len(lines) * 100)
             # FIXME also compare bytes vs total bytes
@@ -103,6 +102,10 @@ class Printer:
 
         self.emit_message('PRINTER_STATUS', 'finished')
         self.printing = False
+
+    def request_temp(self):
+        for msg in self.write_and_get_ack(Printer.REPORT_TEMP):
+            self.emit_message(topic='TEMP', message=msg.decode('ascii').strip())
 
     def command(self, msg):
         if msg == 'stop':
@@ -164,6 +167,13 @@ def on_message(client, data, message, printer):
         printer.command(msg)
 
 
+def log_idle_printer_temps(printer):
+    while True:
+        time.sleep(10)
+        if printer.printing:
+            continue
+        printer.request_temp()
+
 def main():
     args = parse_args()
     client = mqtt.Client()
@@ -172,6 +182,10 @@ def main():
     printer = Printer(args.port, args.baudrate, _handle_info_msg)
 
     log.setLevel(logging.INFO)
+
+    t = Thread(target=log_idle_printer_temps, args=(printer,))
+    t.daemon = True
+    t.start()
 
     client.on_message = partial(on_message, printer=printer)
     client.connect('iot.labs')
